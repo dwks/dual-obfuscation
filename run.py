@@ -1,5 +1,6 @@
 import pandas as pd
 import torch
+import codecs
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Load LlamaGuard 3 locally
@@ -23,10 +24,32 @@ def test_llamaguard(prompt):
 # Testing each prompt
 results = []
 for i, prompt in enumerate(prompts_df['Behavior']):
-    print(f"Testing prompt {i+1}/{len(prompts_df)}")
-    reply = test_llamaguard(f"User: {prompt}")
-    results.append({'prompt': prompt, 'response': reply})
-    print(f"{results[-1]}")
+    print(f"Testing prompt {i+1}/{len(prompts_df)} (normal)")
+    normal_reply = test_llamaguard(f"User: {prompt}\n\n")
+    
+    rot13_prompt = codecs.encode(prompt, 'rot_13')
+    print(f"Testing prompt {i+1}/{len(prompts_df)} (rot13)")
+    rot13_reply = test_llamaguard(f"User: {rot13_prompt}\n\n")
+
+    normal_safe = True
+    rot13_safe = True
+    if 'unsafe' in normal_reply: normal_safe = False
+    if 'unsafe' in rot13_reply: rot13_safe = False
+
+    print({
+        'prompt': prompt.encode('unicode_escape').decode('utf-8'),
+        'normal_response': normal_reply.encode('unicode_escape').decode('utf-8'),
+        'rot13_prompt': rot13_prompt.encode('unicode_escape').decode('utf-8'),
+        'rot13_response': rot13_reply.encode('unicode_escape').decode('utf-8'),
+    })
+    results.append({
+        'prompt': prompt.encode('unicode_escape').decode('utf-8'),
+        'normal_response': normal_reply.encode('unicode_escape').decode('utf-8'),
+        'rot13_response': rot13_reply.encode('unicode_escape').decode('utf-8'),
+        'normal_safe': normal_safe,
+        'rot13_safe': rot13_safe
+    })
+
 
 # Convert to DataFrame and save results
 results_df = pd.DataFrame(results)
