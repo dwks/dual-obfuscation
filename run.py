@@ -1,6 +1,7 @@
 import pandas as pd
 import torch
 import codecs
+import base64
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Load LlamaGuard 3 locally
@@ -11,44 +12,42 @@ model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torc
 # Load HarmBench prompts
 prompts_df = pd.read_csv('HarmBench/data/behavior_datasets/harmbench_behaviors_text_all.csv')
 
-prompts_df = prompts_df[:10]
+#prompts_df = prompts_df[:10]
 
 # Function to test a prompt against LlamaGuard 3 locally
 def test_llamaguard(prompt):
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    outputs = model.generate(**inputs, max_new_tokens=50, temperature=0,
+    outputs = model.generate(**inputs, max_new_tokens=50, #temperature=0,
         pad_token_id=tokenizer.eos_token_id)
     reply = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
     return reply
 
+encodings = [
+    ('normal', lambda x: x),
+    ('base64', lambda text: base64.b64encode(text.encode()).decode()),
+    ('rot13', lambda text: codecs.encode(text, 'rot_13')),
+    ('hex', lambda text: text.encode().hex())
+]
+
 # Testing each prompt
 results = []
 for i, prompt in enumerate(prompts_df['Behavior']):
-    print(f"Testing prompt {i+1}/{len(prompts_df)} (normal)")
-    normal_reply = test_llamaguard(f"User: {prompt}\n\n")
-    
-    rot13_prompt = codecs.encode(prompt, 'rot_13')
-    print(f"Testing prompt {i+1}/{len(prompts_df)} (rot13)")
-    rot13_reply = test_llamaguard(f"User: {rot13_prompt}\n\n")
+    prompt_results = {'prompt': prompt}
 
-    normal_safe = True
-    rot13_safe = True
-    if 'unsafe' in normal_reply: normal_safe = False
-    if 'unsafe' in rot13_reply: rot13_safe = False
+    for encoding_name, encode_func in encodings:
+        encoded_prompt = encode_func(f"User: {prompt}\n\n")
+        print(f"Testing prompt {i+1}/{len(prompts_df)} ({encoding_name})")
+        response = test_llamaguard(encoded_prompt)
 
-    print({
-        'prompt': prompt.encode('unicode_escape').decode('utf-8'),
-        'normal_response': normal_reply.encode('unicode_escape').decode('utf-8'),
-        'rot13_prompt': rot13_prompt.encode('unicode_escape').decode('utf-8'),
-        'rot13_response': rot13_reply.encode('unicode_escape').decode('utf-8'),
-    })
-    results.append({
-        'prompt': prompt.encode('unicode_escape').decode('utf-8'),
-        'normal_response': normal_reply.encode('unicode_escape').decode('utf-8'),
-        'rot13_response': rot13_reply.encode('unicode_escape').decode('utf-8'),
-        'normal_safe': normal_safe,
-        'rot13_safe': rot13_safe
-    })
+        is_safe = True
+        if 'unsafe' in response: is_safe = False
+
+        prompt_results[f'{encoding_name}_prompt'] = encoded_prompt.encode('unicode_escape').decode('utf-8')
+        prompt_results[f'{encoding_name}_response'] = response.encode('unicode_escape').decode('utf-8')
+        prompt_results[f'{encoding_name}_safe'] = is_safe
+
+    print(prompt_results)
+    results.append(prompt_results)
 
 
 # Convert to DataFrame and save results
