@@ -5,7 +5,8 @@ import base64
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Load LlamaGuard 3 locally
-model_name = "meta-llama/Llama-Guard-3-8B"
+#model_name = "meta-llama/Llama-Guard-3-8B"
+model_name = "meta-llama/Meta-Llama-Guard-2-8B"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype=torch.bfloat16)
 
